@@ -72,13 +72,18 @@
             id: "eb54b44c65b846cca12914b87b315169"
           }
         });
+        
         const layer2 = new FeatureLayer({
           url:"https://www.geosceneonline.cn/server/rest/services/Hosted/我国2020年人口密度2/FeatureServer"
+        });
+        
+        const layer3 = new FeatureLayer({
+          url:"https://www.geosceneonline.cn/server/rest/services/Hosted/中国国界线要素/FeatureServer"
         });
 
         const map = new WebMap({
           basemap: "streets",
-          layers: [layer,layer2]
+          layers: [layer,layer2,layer3]
         });
 
 
