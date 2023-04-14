@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+
+    <title>
+      Popup charts for point clusters | Sample | ArcGIS Maps SDK for JavaScript
+      4.26
+    </title>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.26/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.26/"></script>
+
+    <style>
+        html,
+        body,
+        #viewDiv {
+          height: 100%;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+        }
+        #header {
+          background-color: #2d2670;
+          padding: 20px;
+          text-align: center;
+          font-size:30;
+          color:#eaeaea;
+        }
+        #basemapDiv {
+        width: 20px;
+        height: 100%;
+        //background-color: #aadddd;
+        float: left;
+        text-align: center;
+      }
+    </style>
+
+    <script>
+      require([
+        "esri/WebMap",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer",
+        "esri/widgets/Legend",
+        "esri/widgets/Expand",
+        "esri/smartMapping/labels/clusters",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/Search",
+        "esri/widgets/ScaleBar"
+      ], function (
+        WebMap,
+        MapView,
+        FeatureLayer,
+        Legend,
+        Expand,
+        clusterLabelCreator,
+        BasemapGallery,
+        Search,
+        ScaleBar
+      ) {
+        const layer = new FeatureLayer({
+          portalItem: {
+            id: "eb54b44c65b846cca12914b87b315169"
+          }
+        });
+
+        const map = new WebMap({
+          basemap: "streets",
+          layers: [layer]
+        });
+
+        const view = new MapView({
+          container: "viewDiv",
+          map,
+          extent: {
+            spatialReference: {
+              latestWkid: 3857,
+              wkid: 102100
+            },
+            xmin: 12000000,
+            ymin: 2000044,
+            xmax: 13000000,
+            ymax: 6878650
+          },
+          popup: {
+            dockEnabled: true,
+            dockOptions: {
+              breakpoint: false,
+              position: "top-right"
+            }
+          }
+        });
+
+        const basemapGallery = new BasemapGallery({
+          container: "basemapDiv",
+          view: view
+        });
+
+        const searchWidget = new Search({
+          view: view
+        });
+
+        const scaleBar = new ScaleBar({
+          view: view,
+          unit: "dual" // The scale bar displays both metric and non-metric units.
+        });
+
+        view.ui.add(
+          new Expand({
+            content: new Legend({ view }),
+            view
+          }),
+          "top-left"
+        );
+
+        view.ui.add(searchWidget, {
+          position: "top-left"
+        });
+        view.ui.add(basemapGallery, {
+          position: "bottom-left"
+        });
+
+        view.ui.add(scaleBar, {
+          position: "bottom-right"
+        });
+
+        layer
+          .when()
+          .then(generateClusterConfig)
+          .then(async (featureReduction) => {
+            // sets generated cluster configuration on the layer
+            layer.featureReduction = featureReduction;
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+
+        async function generateClusterConfig(layer) {
+          let popupTemplate = {
+            title: "全球发电厂信息查询小程序",
+            content: [
+              {
+                type: "text",
+                text: "该集群代表 <b>{cluster_count}</b> 个发电厂。 <br>以下列出了该集群内最常见的发电燃料类型。</br>"
+              },
+              {
+                type: "expression",
+                // lists the top 5 most common fuel types
+                expressionInfo: {
+                  expression: `
+                  Expects($aggregatedFeatures, "fuel1", "capacity_mw")
+
+                  var statsFS = GroupBy($aggregatedFeatures,
+                    [
+                      { name: 'Type', expression: 'fuel1'},
+                    ],
+                    [
+                      { name: 'num_features', expression: '1', statistic: 'COUNT' }
+                    ]
+                  );
+                  var ordered = Top(OrderBy(statsFs, 'num_features DESC'), 5);
+
+                  // create an HTML ordered list as a string and return in a rich text element
+                  var list = "<ol>";
+
+                  for (var group in ordered){
+                    list += \`<li>\${group.Type} (\${Text(group.num_features, "#,###")})</li>\`
+                  }
+                  list += "</ol>";
+
+                  return {
+                    type: "text",
+                    text: list
+                  }
+                `,
+                  title: "燃料类型列表"
+                }
+              },
+              {
+                // creates two pie charts; one for summarizing each fuel
+                // type by count; the other for each fuel type by capacity
+                type: "expression",
+                expressionInfo: {
+                  expression: `
+                  Expects($aggregatedFeatures, "fuel1", "capacity_mw")
+                  var attributes = {};
+                  var countFieldNames = [];
+                  var capacityFieldNames = [];
+
+                  var types = Distinct($aggregatedFeatures, "fuel1");
+
+                  for(var t in types){
+                    var type = t.fuel1;
+                    var filtered = Filter($aggregatedFeatures, "fuel1 = @type");
+
+                    var countFieldName = type + " count";
+                    attributes[countFieldName] = Count(filtered);
+                    Push(countFieldNames, countFieldName);
+
+                    var capacityFieldName = type + " capacity (mW)";
+                    attributes[capacityFieldName] = DefaultValue(Sum(filtered, "capacity_mw"), 0);
+                    Push(capacityFieldNames, capacityFieldName);
+                  }
+
+                  return {
+                    type: "media",
+                    attributes: attributes,
+                    title: "数量 vs. 发电量",
+                    mediaInfos: [{
+                      type: "piechart",
+                      title: "总数量",
+                      value: {
+                        fields: countFieldNames
+                      }
+                    }, {
+                      type: "piechart",
+                      title: "总发电量 (mW)",
+                      value: {
+                        fields: capacityFieldNames
+                      }
+                    }]
+                  }
+                `,
+                  title: "饼图"
+                }
+              }
+            ]
+          };
+          // generates default labelingInfo
+          const { labelingInfo, clusterMinSize } = await clusterLabelCreator
+            .getLabelSchemes({
+              layer,
+              view
+            })
+            .then((labelSchemes) => labelSchemes.primaryScheme);
+
+          return {
+            type: "cluster",
+            popupTemplate,
+            labelingInfo,
+            clusterMinSize
+          };
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="basemapDiv">底图库</div>
+    <div id="header">中国发电厂信息查询小程序——3205706020方毅彬</div>
+    <div id="viewDiv"></div>
+  </body>
+</html>
