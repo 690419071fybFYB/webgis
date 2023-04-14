@@ -8,7 +8,8 @@
     />
 
     <title>
-      China Power Plant Information Query
+      Popup charts for point clusters | Sample | ArcGIS Maps SDK for JavaScript
+      4.26
     </title>
 
     <link
@@ -52,7 +53,8 @@
         "esri/smartMapping/labels/clusters",
         "esri/widgets/BasemapGallery",
         "esri/widgets/Search",
-        "esri/widgets/ScaleBar"
+        "esri/widgets/ScaleBar",
+        "esri/widgets/LayerList"
       ], function (
         WebMap,
         MapView,
@@ -62,18 +64,23 @@
         clusterLabelCreator,
         BasemapGallery,
         Search,
-        ScaleBar
+        ScaleBar,
+        LayerList
       ) {
         const layer = new FeatureLayer({
           portalItem: {
             id: "eb54b44c65b846cca12914b87b315169"
           }
         });
+        const layer2 = new FeatureLayer({
+          url:"https://www.geosceneonline.cn/server/rest/services/Hosted/我国2020年人口密度2/FeatureServer"
+        });
 
         const map = new WebMap({
           basemap: "streets",
-          layers: [layer]
+          layers: [layer,layer2]
         });
+
 
         const view = new MapView({
           container: "viewDiv",
@@ -129,6 +136,16 @@
         view.ui.add(scaleBar, {
           position: "bottom-right"
         });
+        
+        view.when(() => {
+          const layerList = new LayerList({
+            view: view
+          });
+
+          // Add widget to the top right corner of the view
+          view.ui.add(layerList, "top-right");
+        });
+          
 
         layer
           .when()
@@ -253,7 +270,9 @@
 
   <body>
     <div id="basemapDiv">底图库</div>
-    <div id="header">中国发电厂信息查询小程序——3205706020方毅彬</div>
+    <div id="header">
+    中国发电厂信息查询小程序
+    </div>
     <div id="viewDiv"></div>
   </body>
 </html>
